@@ -12,7 +12,7 @@ import Profil from "./pages/Profil.jsx";
 import Admin from "./pages/Admin.jsx";
 import NotFound from "./pages/NotFound.jsx";
 import LoadingScreen from "./components/LoadingScreen.jsx";
-import ScrollToTop from "./components/ScrollToTop.jsx"; 
+import ScrollToTop from "./components/ScrollToTop.jsx";
 import Wishlist from "./pages/Wishlist.jsx";
 
 function App() {
@@ -22,8 +22,9 @@ function App() {
     <>
       {loading && <LoadingScreen onFinish={() => setLoading(false)} />}
       {!loading && (
-        <Router>
-          <ScrollToTop /> {/* ← tambah di sini, otomatis muncul di semua halaman */}
+        // ← tambah basename agar routing benar di GitHub Pages
+        <Router basename="/Computer-Marketplace">
+          <ScrollToTop />
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/produk" element={<Produk />} />
