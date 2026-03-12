@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/Computer-Marketplace/static/css/main.6e5c5143.css",
+    "main.js": "/Computer-Marketplace/static/js/main.acaeda4a.js",
+    "index.html": "/Computer-Marketplace/index.html",
+    "main.6e5c5143.css.map": "/Computer-Marketplace/static/css/main.6e5c5143.css.map",
+    "main.acaeda4a.js.map": "/Computer-Marketplace/static/js/main.acaeda4a.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.6e5c5143.css",
+    "static/js/main.acaeda4a.js"
+  ]
+}
