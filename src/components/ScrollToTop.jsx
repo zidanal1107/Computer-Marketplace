@@ -1,9 +1,16 @@
 import { useState, useEffect } from "react";
 import { useTheme } from "../context/ThemeContext";
+import { useLocation } from "react-router-dom";
 
 function ScrollToTop() {
     const [visible, setVisible] = useState(false);
     const { isDark } = useTheme();
+    const location = useLocation();
+
+    // Scroll ke atas setiap ganti halaman
+    useEffect(() => {
+        window.scrollTo(0, 0);
+    }, [location]);
 
     useEffect(() => {
         const handleScroll = () => {

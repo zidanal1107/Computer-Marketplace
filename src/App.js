@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { HashRouter as Router, Routes, Route } from "react-router-dom"; // ← ganti HashRouter
+import { HashRouter as Router, Routes, Route } from "react-router-dom";
 import Home from "./pages/Home.jsx";
 import Produk from "./pages/Produk.jsx";
 import DetailProduk from "./pages/DetailProduk.jsx";
@@ -22,7 +22,7 @@ function App() {
     <>
       {loading && <LoadingScreen onFinish={() => setLoading(false)} />}
       {!loading && (
-        <Router> {/* ← tidak perlu basename kalau pakai HashRouter */}
+        <Router>
           <ScrollToTop />
           <Routes>
             <Route path="/" element={<Home />} />
