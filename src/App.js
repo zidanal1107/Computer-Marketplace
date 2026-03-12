@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { HashRouter as Router, Routes, Route } from "react-router-dom"; // ← ganti HashRouter
 import Home from "./pages/Home.jsx";
 import Produk from "./pages/Produk.jsx";
 import DetailProduk from "./pages/DetailProduk.jsx";
@@ -22,8 +22,7 @@ function App() {
     <>
       {loading && <LoadingScreen onFinish={() => setLoading(false)} />}
       {!loading && (
-        // ← tambah basename agar routing benar di GitHub Pages
-        <Router basename="/Computer-Marketplace">
+        <Router> {/* ← tidak perlu basename kalau pakai HashRouter */}
           <ScrollToTop />
           <Routes>
             <Route path="/" element={<Home />} />
