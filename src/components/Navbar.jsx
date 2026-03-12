@@ -19,19 +19,25 @@ function Navbar() {
         { label: "Tentang", path: "/tentang" },
     ];
 
+    const handleNav = (path) => {
+        navigate(path);
+        setMenuOpen(false);
+    };
+
     return (
         <nav className={`shadow-lg px-6 py-4 sticky top-0 z-50 ${isDark ? "bg-gray-900" : "bg-white border-b border-gray-200"}`}>
             <div className="flex justify-between items-center max-w-6xl mx-auto">
-                <h1 onClick={() => navigate("/")} className="text-2xl font-bold text-blue-500 cursor-pointer">
+                <h1 onClick={() => handleNav("/")} className="text-2xl font-bold text-blue-500 cursor-pointer">
                     💻 TechStore
                 </h1>
 
                 {/* Desktop Menu */}
                 <div className="hidden md:flex gap-6 font-semibold">
                     {navLinks.map((link, i) => (
-                        <a key={i} href={link.path} className={`transition border-b-2 pb-1 ${location.pathname === link.path ? "text-blue-500 border-blue-500" : `${isDark ? "text-gray-400" : "text-gray-600"} border-transparent hover:text-blue-500 hover:border-blue-500`}`}>
+                        <button key={i} onClick={() => handleNav(link.path)}
+                            className={`transition border-b-2 pb-1 ${location.pathname === link.path ? "text-blue-500 border-blue-500" : `${isDark ? "text-gray-400" : "text-gray-600"} border-transparent hover:text-blue-500 hover:border-blue-500`}`}>
                             {link.label}
-                        </a>
+                        </button>
                     ))}
                 </div>
 
@@ -42,23 +48,21 @@ function Navbar() {
                     </button>
 
                     {user ? (
-                        <div className="flex items-center gap-3">
-                            <button onClick={() => navigate("/profil")} className={`text-sm px-4 py-2 rounded-full font-semibold transition ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-300" : "bg-gray-200 hover:bg-gray-300 text-gray-700"}`}>
-                                👤 Profil
-                            </button>
-                        </div>
+                        <button onClick={() => handleNav("/profil")} className={`text-sm px-4 py-2 rounded-full font-semibold transition ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-300" : "bg-gray-200 hover:bg-gray-300 text-gray-700"}`}>
+                            👤 Profil
+                        </button>
                     ) : (
-                        <button onClick={() => navigate("/login")} className={`text-sm px-4 py-2 rounded-full font-semibold transition ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-300" : "bg-gray-200 hover:bg-gray-300 text-gray-600"}`}>
+                        <button onClick={() => handleNav("/login")} className={`text-sm px-4 py-2 rounded-full font-semibold transition ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-300" : "bg-gray-200 hover:bg-gray-300 text-gray-600"}`}>
                             Masuk
                         </button>
                     )}
 
-                    <button onClick={() => navigate("/wishlist")} className={`w-10 h-10 rounded-full flex items-center justify-center transition text-xl ${isDark ? "bg-gray-800 hover:bg-gray-700" : "bg-gray-100 hover:bg-gray-200"}`}
+                    <button onClick={() => handleNav("/wishlist")} className={`w-10 h-10 rounded-full flex items-center justify-center transition text-xl ${isDark ? "bg-gray-800 hover:bg-gray-700" : "bg-gray-100 hover:bg-gray-200"}`}
                         title="Wishlist">
                         ❤️
                     </button>
 
-                    <button onClick={() => navigate("/keranjang")} className="bg-blue-500 hover:bg-blue-600 text-white px-5 py-2 rounded-full text-sm font-semibold transition relative">
+                    <button onClick={() => handleNav("/keranjang")} className="bg-blue-500 hover:bg-blue-600 text-white px-5 py-2 rounded-full text-sm font-semibold transition relative">
                         🛒 Keranjang
                         {totalItem > 0 && (
                             <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">
@@ -83,22 +87,24 @@ function Navbar() {
             {menuOpen && (
                 <div className="md:hidden flex flex-col gap-4 mt-4 px-4 pb-4 font-semibold">
                     {navLinks.map((link, i) => (
-                        <a key={i} href={link.path} className={`transition ${location.pathname === link.path ? "text-blue-500 border-l-4 border-blue-500 pl-3" : `${isDark ? "text-gray-400" : "text-gray-600"} hover:text-blue-500 pl-3`}`}>
+                        <button key={i} onClick={() => handleNav(link.path)}
+                            className={`text-left transition ${location.pathname === link.path ? "text-blue-500 border-l-4 border-blue-500 pl-3" : `${isDark ? "text-gray-400" : "text-gray-600"} hover:text-blue-500 pl-3`}`}>
                             {link.label}
-                        </a>
+                        </button>
                     ))}
                     {user ? (
-                        <>
-                            <button onClick={() => navigate("/profil")} className={`text-sm px-4 py-2 rounded-full font-semibold transition ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-300" : "bg-gray-200 hover:bg-gray-300 text-gray-700"}`}>
-                                👤 Profil
-                            </button>
-                        </>
+                        <button onClick={() => handleNav("/profil")} className={`text-sm px-4 py-2 rounded-full font-semibold transition ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-300" : "bg-gray-200 hover:bg-gray-300 text-gray-700"}`}>
+                            👤 Profil
+                        </button>
                     ) : (
-                        <button onClick={() => navigate("/login")} className={`text-sm px-4 py-2 rounded-full font-semibold transition ${isDark ? "bg-gray-800 text-gray-300" : "bg-gray-200 text-gray-600"}`}>
+                        <button onClick={() => handleNav("/login")} className={`text-sm px-4 py-2 rounded-full font-semibold transition ${isDark ? "bg-gray-800 text-gray-300" : "bg-gray-200 text-gray-600"}`}>
                             Masuk
                         </button>
                     )}
-                    <button onClick={() => navigate("/keranjang")} className="bg-blue-500 hover:bg-blue-600 text-white px-5 py-2 rounded-full text-sm font-semibold transition relative">
+                    <button onClick={() => handleNav("/wishlist")} className={`text-sm px-4 py-2 rounded-full font-semibold transition ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-300" : "bg-gray-200 hover:bg-gray-300 text-gray-700"}`}>
+                        ❤️ Wishlist
+                    </button>
+                    <button onClick={() => handleNav("/keranjang")} className="bg-blue-500 hover:bg-blue-600 text-white px-5 py-2 rounded-full text-sm font-semibold transition relative">
                         🛒 Keranjang
                         {totalItem > 0 && (
                             <span className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full ml-1">
