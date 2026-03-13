@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
 import { useAdmin } from "../context/AdminContext";
@@ -12,8 +12,8 @@ function Admin() {
     const { isDark } = useTheme();
     const {
         produk, tambahProduk, editProduk, hapusProduk,
-        semuaPesanan, updateStatusPesanan, refreshPesanan,
-        pengguna, hapusPengguna, refreshPengguna,
+        semuaPesanan, updateStatusPesanan,
+        pengguna, hapusPengguna,
         pengeluaran, tambahPengeluaran, hapusPengeluaran,
         totalPemasukan, totalPengeluaran, hpp, labaKotor, labaBersih,
     } = useAdmin();
@@ -31,13 +31,6 @@ function Admin() {
     // Form pengeluaran
     const [formPengeluaran, setFormPengeluaran] = useState({ nama: "", jumlah: "", kategori: "Operasional", tanggal: new Date().toLocaleDateString("id-ID") });
     const [showFormPengeluaran, setShowFormPengeluaran] = useState(false);
-
-    useEffect(() => {
-        if (isAdmin) {
-            refreshPesanan();
-            refreshPengguna();
-        }
-    }, [isAdmin]);
 
     const bg = isDark ? "bg-gray-950 text-white" : "bg-gray-50 text-gray-800";
     const bgCard = isDark ? "bg-gray-900" : "bg-white border border-gray-200";

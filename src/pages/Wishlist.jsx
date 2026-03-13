@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useKeranjang } from "../context/KeranjangContext";
 import { useTheme } from "../context/ThemeContext";
@@ -21,7 +21,6 @@ function Wishlist() {
 
     const bg = isDark ? "bg-gray-950 text-white" : "bg-gray-50 text-gray-800";
     const bgCard = isDark ? "bg-gray-900" : "bg-white border border-gray-200";
-    const bgSection = isDark ? "bg-gray-800" : "bg-gray-100";
     const textMuted = isDark ? "text-gray-400" : "text-gray-500";
 
     const formatRupiah = (num) => "Rp " + num.toLocaleString("id-ID");
