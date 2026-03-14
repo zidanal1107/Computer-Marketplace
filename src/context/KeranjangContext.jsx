@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from "react";
+import API_URL from "../config/api";
 
 const KeranjangContext = createContext();
 
@@ -44,20 +45,48 @@ export function KeranjangProvider({ children }) {
         localStorage.removeItem("keranjang");
     };
 
-    const simpanPesanan = (items, total, alamat) => {
-        const pesananBaru = {
-            id: Date.now(),
-            tanggal: new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }),
-            jam: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
-            items,
-            total,
-            alamat,
-            status: "Diproses", // Diproses → Dikirim → Selesai
-        };
-        setRiwayat((prev) => [pesananBaru, ...prev]);
+    // Simpan pesanan ke API + localStorage
+    const simpanPesanan = async (items, total, alamat, token) => {
+        try {
+            const res = await fetch(`${API_URL}/pesanan`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({ items, total, alamat }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message);
+
+            // Simpan ke localStorage juga
+            const pesananBaru = {
+                id: data.pesananId,
+                tanggal: new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }),
+                jam: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+                items,
+                total,
+                alamat,
+                status: "Diproses",
+            };
+            setRiwayat((prev) => [pesananBaru, ...prev]);
+            kosongkanKeranjang();
+            return data;
+        } catch (err) {
+            throw new Error(err.message);
+        }
     };
 
-    const konfirmasiTerima = (id) => {
+    // Konfirmasi terima ke API + localStorage
+    const konfirmasiTerima = async (id, token) => {
+        try {
+            await fetch(`${API_URL}/pesanan/${id}/terima`, {
+                method: "PUT",
+                headers: { Authorization: `Bearer ${token}` },
+            });
+        } catch (err) {
+            console.error(err);
+        }
         setRiwayat((prev) =>
             prev.map((p) => p.id === id ? { ...p, status: "Selesai" } : p)
         );

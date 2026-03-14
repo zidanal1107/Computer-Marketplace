@@ -1,15 +1,109 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { useKeranjang } from "../context/KeranjangContext";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import API_URL from "../config/api";
 
+// ═══════════════ KOMPONEN RIWAYAT BOOKING ═══════════════
+function RiwayatBooking({ token, isDark, bgCard, bgSection, textMuted }) {
+    const [booking, setBooking] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [buka, setBuka] = useState(null);
+
+    useEffect(() => {
+        const fetchBooking = async () => {
+            if (!token) { setLoading(false); return; }
+            try {
+                const res = await fetch(`${API_URL}/booking/saya`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const data = await res.json();
+                setBooking(Array.isArray(data) ? data : []);
+            } catch (err) {
+                console.error(err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchBooking();
+    }, [token]);
+
+    const warnaBadge = (status) => {
+        if (status === "Menunggu") return "bg-yellow-500 text-white";
+        if (status === "Diproses") return "bg-blue-500 text-white";
+        if (status === "Selesai") return "bg-green-600 text-white";
+        if (status === "Dibatalkan") return "bg-red-600 text-white";
+        return "bg-gray-500 text-white";
+    };
+
+    return (
+        <div className={`${bgCard} rounded-xl p-6`}>
+            <h2 className="text-xl font-bold mb-2">🔧 Riwayat Booking Service</h2>
+            <p className={`text-sm ${textMuted} mb-6`}>Daftar booking service yang pernah kamu buat</p>
+
+            {loading ? (
+                <div className="text-center py-8">
+                    <p className="text-4xl animate-bounce mb-2">⏳</p>
+                    <p className={textMuted}>Memuat riwayat booking...</p>
+                </div>
+            ) : booking.length === 0 ? (
+                <div className="text-center py-8">
+                    <p className="text-4xl mb-2">🔧</p>
+                    <p className={textMuted}>Belum ada booking service</p>
+                </div>
+            ) : (
+                <div className="space-y-3">
+                    {booking.map((b) => (
+                        <div key={b.id} className={`rounded-xl border ${isDark ? "border-gray-700" : "border-gray-200"} overflow-hidden`}>
+                            <div className={`flex items-center justify-between px-4 py-3 ${bgSection}`}>
+                                <div>
+                                    <p className="font-bold text-sm">#{String(b.id).padStart(4, "0")} · {b.paket}</p>
+                                    <p className={`text-xs ${textMuted}`}>{b.created_at?.slice(0, 10)}</p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className={`text-xs px-3 py-1 rounded-full font-semibold ${warnaBadge(b.status)}`}>
+                                        {b.status}
+                                    </span>
+                                    <button onClick={() => setBuka(buka === b.id ? null : b.id)}
+                                        className={`text-xs px-3 py-1 rounded-full transition ${isDark ? "bg-gray-700 hover:bg-gray-600 text-gray-300" : "bg-gray-200 hover:bg-gray-300 text-gray-600"}`}>
+                                        {buka === b.id ? "Tutup" : "Detail"}
+                                    </button>
+                                </div>
+                            </div>
+
+                            {buka === b.id && (
+                                <div className={`px-4 py-4 space-y-2 border-t ${isDark ? "border-gray-700" : "border-gray-200"}`}>
+                                    {[
+                                        { label: "Nama", value: b.nama },
+                                        { label: "HP", value: b.hp },
+                                        { label: "Perangkat", value: b.perangkat },
+                                        { label: "Keluhan", value: b.keluhan },
+                                        { label: "Paket", value: b.paket },
+                                        { label: "Tgl Kerjakan", value: b.tanggal_pengerjaan?.slice(0, 10) || "-" },
+                                    ].map((item, i) => (
+                                        <div key={i} className={`flex gap-3 p-2 rounded-lg ${bgSection}`}>
+                                            <p className={`text-xs ${textMuted} w-20 shrink-0`}>{item.label}</p>
+                                            <p className="text-sm font-semibold">{item.value}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ═══════════════ HALAMAN PROFIL ═══════════════
 function Profil() {
-    const { user, login, logout } = useAuth();
+    const { user, token, updateProfil, logout } = useAuth();
     const { isDark } = useTheme();
-    const { keranjang, riwayat, konfirmasiTerima } = useKeranjang();
+    const { keranjang, konfirmasiTerima } = useKeranjang();
     const navigate = useNavigate();
 
     const [editMode, setEditMode] = useState(false);
@@ -17,6 +111,8 @@ function Profil() {
     const [sukses, setSukses] = useState("");
     const [alamatSukses, setAlamatSukses] = useState("");
     const [bukaRiwayat, setBukaRiwayat] = useState(null);
+    const [riwayat, setRiwayat] = useState([]);
+    const [loadingRiwayat, setLoadingRiwayat] = useState(false);
 
     const [alamat, setAlamat] = useState(() => {
         const saved = localStorage.getItem("alamat_pengiriman");
@@ -32,6 +128,24 @@ function Profil() {
     const textMuted = isDark ? "text-gray-400" : "text-gray-500";
     const bgSection = isDark ? "bg-gray-800" : "bg-gray-100";
 
+    const fetchRiwayat = async () => {
+        if (!token) return;
+        setLoadingRiwayat(true);
+        try {
+            const res = await fetch(`${API_URL}/pesanan/saya`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const data = await res.json();
+            setRiwayat(Array.isArray(data) ? data : []);
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setLoadingRiwayat(false);
+        }
+    };
+
+    useEffect(() => { fetchRiwayat(); }, [token]);
+
     if (!user) {
         return (
             <div className={`min-h-screen ${bg} flex flex-col items-center justify-center gap-4`}>
@@ -45,18 +159,22 @@ function Profil() {
         );
     }
 
-    const handleSimpan = () => {
+    const handleSimpan = async () => {
         if (!form.nama || !form.email) return;
-        login({ ...user, nama: form.nama, email: form.email });
-        setSukses("✅ Profil berhasil diperbarui!");
-        setEditMode(false);
-        setTimeout(() => setSukses(""), 3000);
+        try {
+            await updateProfil(form.nama, form.email);
+            setSukses("✅ Profil berhasil diperbarui!");
+            setEditMode(false);
+            setTimeout(() => setSukses(""), 3000);
+        } catch (err) {
+            setSukses("⚠️ " + err.message);
+            setTimeout(() => setSukses(""), 3000);
+        }
     };
 
     const handleSimpanAlamat = () => {
         const wajib = ["namaPenerima", "noHp", "jalan", "kelurahan", "kecamatan", "kota", "provinsi", "kodePos"];
-        const kosong = wajib.some((k) => !alamat[k]);
-        if (kosong) {
+        if (wajib.some((k) => !alamat[k])) {
             setAlamatSukses("⚠️ Harap isi semua field wajib!");
             setTimeout(() => setAlamatSukses(""), 3000);
             return;
@@ -66,18 +184,20 @@ function Profil() {
         setTimeout(() => setAlamatSukses(""), 3000);
     };
 
-    const handleLogout = () => {
-        logout();
-        navigate("/");
+    const handleLogout = () => { logout(); navigate("/"); };
+
+    const handleKonfirmasi = async (id) => {
+        await konfirmasiTerima(id, token);
+        fetchRiwayat();
     };
 
-    const totalBelanja = keranjang.reduce((acc, p) => acc + p.harga * p.qty, 0);
-    const formatRupiah = (num) => "Rp " + num.toLocaleString("id-ID");
+    const formatRupiah = (num) => "Rp " + Number(num).toLocaleString("id-ID");
 
     const warnaBadge = (status) => {
         if (status === "Diproses") return "bg-yellow-500 text-white";
         if (status === "Dikirim") return "bg-blue-500 text-white";
         if (status === "Selesai") return "bg-green-600 text-white";
+        if (status === "Dibatalkan") return "bg-red-600 text-white";
         return "bg-gray-500 text-white";
     };
 
@@ -85,9 +205,8 @@ function Profil() {
         <div className={`min-h-screen ${bg}`}>
             <Navbar />
 
-            {/* Notif Toast */}
             {sukses && (
-                <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white px-6 py-3 rounded-full shadow-lg text-sm font-semibold">
+                <div className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-full shadow-lg text-sm font-semibold text-white ${sukses.startsWith("⚠️") ? "bg-red-600" : "bg-green-600"}`}>
                     {sukses}
                 </div>
             )}
@@ -97,11 +216,8 @@ function Profil() {
                 </div>
             )}
 
-            {/* Header */}
             <section className={`px-6 py-12 text-center ${isDark ? "bg-gradient-to-b from-blue-950 to-gray-950" : "bg-gradient-to-b from-blue-100 to-gray-50"}`}>
-                <div className="w-24 h-24 rounded-full bg-blue-500 flex items-center justify-center text-4xl mx-auto mb-4">
-                    👤
-                </div>
+                <div className="w-24 h-24 rounded-full bg-blue-500 flex items-center justify-center text-4xl mx-auto mb-4">👤</div>
                 <h1 className="text-2xl font-bold">{user.nama}</h1>
                 <p className={textMuted}>{user.email}</p>
             </section>
@@ -113,7 +229,7 @@ function Profil() {
                     {[
                         { label: "Item di Keranjang", value: keranjang.length, icon: "🛒" },
                         { label: "Total Qty", value: keranjang.reduce((acc, p) => acc + p.qty, 0), icon: "📦" },
-                        { label: "Total Belanja", value: formatRupiah(totalBelanja), icon: "💰" },
+                        { label: "Total Pesanan", value: riwayat.length, icon: "📋" },
                     ].map((stat, i) => (
                         <div key={i} className={`${bgCard} rounded-xl p-4 text-center`}>
                             <p className="text-3xl mb-1">{stat.icon}</p>
@@ -173,8 +289,12 @@ function Profil() {
                 <div className={`${bgCard} rounded-xl p-6`}>
                     <h2 className="text-xl font-bold mb-2">📦 Riwayat Pesanan</h2>
                     <p className={`text-sm ${textMuted} mb-6`}>Daftar pesanan yang sudah kamu checkout</p>
-
-                    {riwayat.length === 0 ? (
+                    {loadingRiwayat ? (
+                        <div className="text-center py-8">
+                            <p className="text-4xl animate-bounce mb-2">⏳</p>
+                            <p className={textMuted}>Memuat riwayat...</p>
+                        </div>
+                    ) : riwayat.length === 0 ? (
                         <div className="text-center py-8">
                             <p className="text-4xl mb-2">📭</p>
                             <p className={textMuted}>Belum ada pesanan</p>
@@ -183,38 +303,29 @@ function Profil() {
                         <div className="space-y-4">
                             {riwayat.map((pesanan) => (
                                 <div key={pesanan.id} className={`rounded-xl border ${isDark ? "border-gray-700" : "border-gray-200"} overflow-hidden`}>
-
-                                    {/* Header Pesanan */}
                                     <div className={`flex items-center justify-between px-4 py-3 ${bgSection}`}>
                                         <div>
                                             <p className="font-bold text-sm">Pesanan #{String(pesanan.id).slice(-6)}</p>
-                                            <p className={`text-xs ${textMuted}`}>{pesanan.tanggal} · {pesanan.jam}</p>
+                                            <p className={`text-xs ${textMuted}`}>{pesanan.created_at?.slice(0, 10)}</p>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <span className={`text-xs px-3 py-1 rounded-full font-semibold ${warnaBadge(pesanan.status)}`}>
                                                 {pesanan.status}
                                             </span>
-                                            <button
-                                                onClick={() => setBukaRiwayat(bukaRiwayat === pesanan.id ? null : pesanan.id)}
+                                            <button onClick={() => setBukaRiwayat(bukaRiwayat === pesanan.id ? null : pesanan.id)}
                                                 className={`text-xs px-3 py-1 rounded-full transition ${isDark ? "bg-gray-700 hover:bg-gray-600 text-gray-300" : "bg-gray-200 hover:bg-gray-300 text-gray-600"}`}>
                                                 {bukaRiwayat === pesanan.id ? "Tutup" : "Detail"}
                                             </button>
                                         </div>
                                     </div>
-
-                                    {/* Ringkasan cepat */}
                                     <div className="px-4 py-3 flex justify-between items-center">
-                                        <p className={`text-sm ${textMuted}`}>{pesanan.items.length} produk</p>
+                                        <p className={`text-sm ${textMuted}`}>{pesanan.items?.length} produk</p>
                                         <p className="font-bold text-blue-500">{formatRupiah(pesanan.total)}</p>
                                     </div>
-
-                                    {/* Detail Pesanan (accordion) */}
                                     {bukaRiwayat === pesanan.id && (
                                         <div className={`px-4 pb-4 space-y-3 border-t ${isDark ? "border-gray-700" : "border-gray-200"}`}>
-
-                                            {/* Daftar produk */}
                                             <div className="mt-3 space-y-2">
-                                                {pesanan.items.map((item, i) => (
+                                                {pesanan.items?.map((item, i) => (
                                                     <div key={i} className={`flex items-center gap-3 p-3 rounded-lg ${bgSection}`}>
                                                         <span className="text-2xl">{item.icon}</span>
                                                         <div className="flex-1">
@@ -228,31 +339,25 @@ function Profil() {
                                                     </div>
                                                 ))}
                                             </div>
-
-                                            {/* Alamat */}
-                                            {pesanan.alamat?.namaPenerima && (
+                                            {pesanan.nama_penerima && (
                                                 <div className={`p-3 rounded-lg text-sm ${bgSection}`}>
                                                     <p className="font-bold mb-1">📍 Alamat Pengiriman:</p>
-                                                    <p className={textMuted}>{pesanan.alamat.namaPenerima} | {pesanan.alamat.noHp}</p>
-                                                    <p className={textMuted}>{pesanan.alamat.jalan}</p>
-                                                    <p className={textMuted}>{pesanan.alamat.kelurahan}, {pesanan.alamat.kecamatan}, {pesanan.alamat.kota}</p>
-                                                    <p className={textMuted}>{pesanan.alamat.provinsi} {pesanan.alamat.kodePos}</p>
+                                                    <p className={textMuted}>{pesanan.nama_penerima} | {pesanan.no_hp}</p>
+                                                    <p className={textMuted}>{pesanan.jalan}</p>
+                                                    <p className={textMuted}>{pesanan.kelurahan}, {pesanan.kecamatan}, {pesanan.kota}</p>
+                                                    <p className={textMuted}>{pesanan.provinsi} {pesanan.kode_pos}</p>
                                                 </div>
                                             )}
-
-                                            {/* Tombol Konfirmasi */}
-                                            {pesanan.status !== "Selesai" ? (
-                                                <button
-                                                    onClick={() => konfirmasiTerima(pesanan.id)}
-                                                    className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-full font-semibold transition"
-                                                >
+                                            {pesanan.status !== "Selesai" && pesanan.status !== "Dibatalkan" ? (
+                                                <button onClick={() => handleKonfirmasi(pesanan.id)}
+                                                    className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-full font-semibold transition">
                                                     ✅ Konfirmasi Barang Sudah Sampai
                                                 </button>
-                                            ) : (
+                                            ) : pesanan.status === "Selesai" ? (
                                                 <div className="w-full bg-green-900 border border-green-600 text-green-400 py-3 rounded-full font-semibold text-center text-sm">
                                                     ✅ Pesanan Selesai - Barang Sudah Diterima
                                                 </div>
-                                            )}
+                                            ) : null}
                                         </div>
                                     )}
                                 </div>
@@ -260,6 +365,15 @@ function Profil() {
                         </div>
                     )}
                 </div>
+
+                {/* Riwayat Booking Service */}
+                <RiwayatBooking
+                    token={token}
+                    isDark={isDark}
+                    bgCard={bgCard}
+                    bgSection={bgSection}
+                    textMuted={textMuted}
+                />
 
                 {/* Alamat Pengiriman */}
                 <div className={`${bgCard} rounded-xl p-6`}>
@@ -270,7 +384,7 @@ function Profil() {
                             {[
                                 { label: "Nama Penerima", key: "namaPenerima", placeholder: "Nama lengkap penerima", col: "md:col-span-2" },
                                 { label: "Nomor HP Penerima", key: "noHp", placeholder: "Contoh: 0812-3456-7890", col: "md:col-span-2" },
-                                { label: "Nama Jalan / Alamat Lengkap", key: "jalan", placeholder: "Contoh: Jl. Mawar No. 10, RT 02/RW 03", col: "md:col-span-2" },
+                                { label: "Nama Jalan / Alamat Lengkap", key: "jalan", placeholder: "Contoh: Jl. Mawar No. 10", col: "md:col-span-2" },
                                 { label: "Kelurahan", key: "kelurahan", placeholder: "Contoh: Mojoroto" },
                                 { label: "Kecamatan", key: "kecamatan", placeholder: "Contoh: Mojoroto" },
                                 { label: "Kota / Kabupaten", key: "kota", placeholder: "Contoh: Kediri" },
@@ -314,7 +428,6 @@ function Profil() {
                 </div>
 
             </section>
-
             <Footer />
         </div>
     );

@@ -3,32 +3,29 @@ import { useNavigate } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
 import { useAdmin } from "../context/AdminContext";
 
-// Akun admin hardcode (nanti bisa diganti API)
-const ADMIN_EMAIL = "admin@techstore.com";
-const ADMIN_PASSWORD = "admin123";
-
 function Admin() {
     const navigate = useNavigate();
     const { isDark } = useTheme();
     const {
+        adminToken, loginAdmin, logoutAdmin,
         produk, tambahProduk, editProduk, hapusProduk,
         semuaPesanan, updateStatusPesanan,
+        semuaBooking, updateStatusBooking, hapusBooking,
         pengguna, hapusPengguna,
         pengeluaran, tambahPengeluaran, hapusPengeluaran,
-        totalPemasukan, totalPengeluaran, hpp, labaKotor, labaBersih,
+        totalPemasukan, totalPemasuklanProduk, totalPemasuklanService,
+        totalPengeluaran, hpp, labaKotor, labaBersih,
     } = useAdmin();
 
     const [tab, setTab] = useState("dashboard");
     const [loginForm, setLoginForm] = useState({ email: "", password: "" });
-    const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem("is_admin") === "true");
     const [loginError, setLoginError] = useState("");
+    const [loginLoading, setLoginLoading] = useState(false);
 
-    // Form produk
-    const [formProduk, setFormProduk] = useState({ nama: "", harga: "", kategori: "Laptop", icon: "💻", stok: "Tersedia", spek: "", deskripsi: "", garansi: "", berat: "" });
+    const [formProduk, setFormProduk] = useState({ nama: "", harga: "", jumlah_stok: "", kategori: "Laptop", icon: "💻", stok: "Tersedia", spek: "", deskripsi: "", garansi: "", berat: "" });
     const [editId, setEditId] = useState(null);
     const [showFormProduk, setShowFormProduk] = useState(false);
 
-    // Form pengeluaran
     const [formPengeluaran, setFormPengeluaran] = useState({ nama: "", jumlah: "", kategori: "Operasional", tanggal: new Date().toLocaleDateString("id-ID") });
     const [showFormPengeluaran, setShowFormPengeluaran] = useState(false);
 
@@ -49,55 +46,62 @@ function Admin() {
         return "bg-gray-500 text-white";
     };
 
-    // Login admin
-    const handleLoginAdmin = () => {
-        if (loginForm.email === ADMIN_EMAIL && loginForm.password === ADMIN_PASSWORD) {
-            localStorage.setItem("is_admin", "true");
-            setIsAdmin(true);
-            setLoginError("");
-        } else {
-            setLoginError("Email atau password admin salah!");
+    const warnaBooking = (status) => {
+        if (status === "Menunggu") return "bg-yellow-500 text-white";
+        if (status === "Diproses") return "bg-blue-500 text-white";
+        if (status === "Selesai") return "bg-green-600 text-white";
+        if (status === "Dibatalkan") return "bg-red-600 text-white";
+        return "bg-gray-500 text-white";
+    };
+
+    const handleLoginAdmin = async () => {
+        setLoginError("");
+        setLoginLoading(true);
+        try {
+            await loginAdmin(loginForm.email, loginForm.password);
+        } catch (err) {
+            setLoginError(err.message);
+        } finally {
+            setLoginLoading(false);
         }
     };
 
     const handleLogoutAdmin = () => {
-        localStorage.removeItem("is_admin");
-        setIsAdmin(false);
+        logoutAdmin();
         navigate("/");
     };
 
-    // Simpan produk (tambah atau edit)
-    const handleSimpanProduk = () => {
+    const handleSimpanProduk = async () => {
         if (!formProduk.nama || !formProduk.harga || !formProduk.spek) {
             alert("Harap isi nama, harga, dan spek!");
             return;
         }
+        const data = { ...formProduk, harga: parseInt(formProduk.harga), jumlah_stok: parseInt(formProduk.jumlah_stok) || 0 };
         if (editId) {
-            editProduk(editId, { ...formProduk, harga: parseInt(formProduk.harga) });
+            await editProduk(editId, data);
             setEditId(null);
         } else {
-            tambahProduk({ ...formProduk, harga: parseInt(formProduk.harga) });
+            await tambahProduk(data);
         }
-        setFormProduk({ nama: "", harga: "", kategori: "Laptop", icon: "💻", stok: "Tersedia", spek: "", deskripsi: "", garansi: "", berat: "" });
+        setFormProduk({ nama: "", harga: "", jumlah_stok: "", kategori: "Laptop", icon: "💻", stok: "Tersedia", spek: "", deskripsi: "", garansi: "", berat: "" });
         setShowFormProduk(false);
     };
 
     const handleEditProduk = (p) => {
-        setFormProduk({ ...p, harga: String(p.harga) });
+        setFormProduk({ ...p, harga: String(p.harga), jumlah_stok: String(p.jumlah_stok) });
         setEditId(p.id);
         setShowFormProduk(true);
         window.scrollTo(0, 0);
     };
 
-    const handleSimpanPengeluaran = () => {
+    const handleSimpanPengeluaran = async () => {
         if (!formPengeluaran.nama || !formPengeluaran.jumlah) return;
-        tambahPengeluaran({ ...formPengeluaran, jumlah: parseInt(formPengeluaran.jumlah) });
+        await tambahPengeluaran({ ...formPengeluaran, jumlah: parseInt(formPengeluaran.jumlah) });
         setFormPengeluaran({ nama: "", jumlah: "", kategori: "Operasional", tanggal: new Date().toLocaleDateString("id-ID") });
         setShowFormPengeluaran(false);
     };
 
-    // Halaman login admin
-    if (!isAdmin) {
+    if (!adminToken) {
         return (
             <div className={`min-h-screen ${bg} flex items-center justify-center px-4`}>
                 <div className={`${bgCard} rounded-2xl p-8 w-full max-w-md shadow-xl`}>
@@ -106,13 +110,11 @@ function Admin() {
                         <h1 className="text-2xl font-bold text-blue-500">Admin TechStore</h1>
                         <p className={textMuted}>Masuk sebagai administrator</p>
                     </div>
-
                     {loginError && (
                         <div className="bg-red-900 border border-red-500 text-red-300 px-4 py-3 rounded-lg text-sm mb-4">
                             ⚠️ {loginError}
                         </div>
                     )}
-
                     <div className="space-y-4">
                         <div>
                             <label className={`text-sm ${textMuted} mb-1 block`}>Email Admin</label>
@@ -128,18 +130,13 @@ function Admin() {
                                 onKeyDown={(e) => e.key === "Enter" && handleLoginAdmin()}
                                 className={`w-full px-4 py-3 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 ${bgInput}`} />
                         </div>
-                        <button onClick={handleLoginAdmin} className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-full font-semibold transition">
-                            Masuk sebagai Admin 🔐
+                        <button onClick={handleLoginAdmin} disabled={loginLoading}
+                            className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-blue-800 text-white py-3 rounded-full font-semibold transition">
+                            {loginLoading ? "Memuat..." : "Masuk sebagai Admin 🔐"}
                         </button>
                         <button onClick={() => navigate("/")} className={`w-full py-3 rounded-full font-semibold transition border ${isDark ? "border-gray-600 text-gray-400" : "border-gray-300 text-gray-500"}`}>
                             ← Kembali ke Toko
                         </button>
-                    </div>
-
-                    <div className={`mt-4 p-3 rounded-lg text-xs ${bgSection} ${textMuted}`}>
-                        <p className="font-semibold mb-1">🧪 Akun Demo Admin:</p>
-                        <p>Email: admin@techstore.com</p>
-                        <p>Password: admin123</p>
                     </div>
                 </div>
             </div>
@@ -151,6 +148,7 @@ function Admin() {
         { id: "produk", label: "Produk", icon: "📦" },
         { id: "pesanan", label: "Pesanan", icon: "🛒" },
         { id: "keuangan", label: "Keuangan", icon: "💰" },
+        { id: "booking", label: "Booking", icon: "🔧" },
         { id: "pengguna", label: "Pengguna", icon: "👥" },
     ];
 
@@ -158,7 +156,7 @@ function Admin() {
         <div className={`min-h-screen ${bg} flex`}>
 
             {/* Sidebar */}
-            <aside className={`w-64 min-h-screen border-r ${bgSidebar} flex flex-col hidden md:flex`}>
+            <aside className={`w-64 min-h-screen border-r ${bgSidebar} flex-col hidden md:flex`}>
                 <div className="p-6 border-b border-gray-800">
                     <h1 className="text-xl font-bold text-blue-500">💻 TechStore</h1>
                     <p className={`text-xs ${textMuted} mt-1`}>Admin Panel</p>
@@ -192,20 +190,17 @@ function Admin() {
                 ))}
             </div>
 
-            {/* Konten Utama */}
             <main className="flex-1 p-6 overflow-auto pb-24 md:pb-6">
 
                 {/* ═══════════════ DASHBOARD ═══════════════ */}
                 {tab === "dashboard" && (
                     <div>
                         <h2 className="text-2xl font-bold mb-6">📊 Dashboard</h2>
-
-                        {/* Kartu Statistik */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                             {[
                                 { label: "Total Produk", value: produk.length, icon: "📦", warna: "text-blue-500" },
                                 { label: "Total Pesanan", value: semuaPesanan.length, icon: "🛒", warna: "text-green-500" },
-                                { label: "Total Pengguna", value: pengguna.length, icon: "👥", warna: "text-purple-500" },
+                                { label: "Total Booking", value: semuaBooking?.length || 0, icon: "🔧", warna: "text-yellow-500" },
                                 { label: "Laba Bersih", value: formatRupiah(labaBersih), icon: "💰", warna: labaBersih >= 0 ? "text-green-500" : "text-red-500" },
                             ].map((stat, i) => (
                                 <div key={i} className={`${bgCard} rounded-xl p-5 text-center`}>
@@ -227,7 +222,7 @@ function Admin() {
                                         <div key={p.id} className={`flex justify-between items-center p-3 rounded-lg ${bgSection}`}>
                                             <div>
                                                 <p className="font-semibold text-sm">#{String(p.id).slice(-6)}</p>
-                                                <p className={`text-xs ${textMuted}`}>{p.tanggal} · {p.items?.length} produk</p>
+                                                <p className={`text-xs ${textMuted}`}>{p.created_at?.slice(0, 10)} · {p.items?.length} produk</p>
                                             </div>
                                             <div className="text-right">
                                                 <p className="text-blue-500 font-bold text-sm">{formatRupiah(p.total)}</p>
@@ -239,14 +234,35 @@ function Admin() {
                             )}
                         </div>
 
+                        {/* Booking Terbaru */}
+                        <div className={`${bgCard} rounded-xl p-6 mb-6`}>
+                            <h3 className="text-lg font-bold mb-4">🔧 Booking Terbaru</h3>
+                            {!semuaBooking?.length ? (
+                                <p className={textMuted}>Belum ada booking masuk</p>
+                            ) : (
+                                <div className="space-y-3">
+                                    {semuaBooking.slice(0, 5).map((b) => (
+                                        <div key={b.id} className={`flex justify-between items-center p-3 rounded-lg ${bgSection}`}>
+                                            <div>
+                                                <p className="font-semibold text-sm">{b.nama} · {b.paket}</p>
+                                                <p className={`text-xs ${textMuted}`}>{b.created_at?.slice(0, 10)} · {b.perangkat}</p>
+                                            </div>
+                                            <span className={`text-xs px-2 py-0.5 rounded-full ${warnaBooking(b.status)}`}>{b.status}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
                         {/* Ringkasan Keuangan */}
                         <div className={`${bgCard} rounded-xl p-6`}>
                             <h3 className="text-lg font-bold mb-4">💰 Ringkasan Keuangan</h3>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                                 {[
+                                    { label: "Pemasukan Produk", value: formatRupiah(totalPemasuklanProduk || 0), warna: "text-green-400" },
+                                    { label: "Pemasukan Service", value: formatRupiah(totalPemasuklanService || 0), warna: "text-blue-400" },
                                     { label: "Total Pemasukan", value: formatRupiah(totalPemasukan), warna: "text-green-500" },
                                     { label: "HPP (60%)", value: formatRupiah(hpp), warna: "text-yellow-500" },
-                                    { label: "Laba Kotor", value: formatRupiah(labaKotor), warna: "text-blue-500" },
                                     { label: "Total Pengeluaran", value: formatRupiah(totalPengeluaran), warna: "text-red-500" },
                                     { label: "Laba Bersih", value: formatRupiah(labaBersih), warna: labaBersih >= 0 ? "text-green-500" : "text-red-500" },
                                 ].map((item, i) => (
@@ -265,13 +281,12 @@ function Admin() {
                     <div>
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-2xl font-bold">📦 Kelola Produk</h2>
-                            <button onClick={() => { setShowFormProduk(!showFormProduk); setEditId(null); setFormProduk({ nama: "", harga: "", kategori: "Laptop", icon: "💻", stok: "Tersedia", spek: "", deskripsi: "", garansi: "", berat: "" }); }}
+                            <button onClick={() => { setShowFormProduk(!showFormProduk); setEditId(null); setFormProduk({ nama: "", harga: "", jumlah_stok: "", kategori: "Laptop", icon: "💻", stok: "Tersedia", spek: "", deskripsi: "", garansi: "", berat: "" }); }}
                                 className="bg-blue-500 hover:bg-blue-600 text-white px-5 py-2 rounded-full text-sm font-semibold transition">
                                 {showFormProduk ? "Batal" : "+ Tambah Produk"}
                             </button>
                         </div>
 
-                        {/* Form Tambah/Edit Produk */}
                         {showFormProduk && (
                             <div className={`${bgCard} rounded-xl p-6 mb-6`}>
                                 <h3 className="font-bold mb-4">{editId ? "✏️ Edit Produk" : "➕ Tambah Produk Baru"}</h3>
@@ -279,6 +294,7 @@ function Admin() {
                                     {[
                                         { label: "Nama Produk", key: "nama", placeholder: "Contoh: Laptop ASUS" },
                                         { label: "Harga (angka)", key: "harga", placeholder: "Contoh: 7500000" },
+                                        { label: "Jumlah Stok", key: "jumlah_stok", placeholder: "Contoh: 10" },
                                         { label: "Spesifikasi", key: "spek", placeholder: "Contoh: Intel i5, 8GB RAM" },
                                         { label: "Garansi", key: "garansi", placeholder: "Contoh: 1 Tahun Resmi" },
                                         { label: "Berat", key: "berat", placeholder: "Contoh: 1.8 kg" },
@@ -299,7 +315,7 @@ function Admin() {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className={`text-sm ${textMuted} mb-1 block`}>Stok</label>
+                                        <label className={`text-sm ${textMuted} mb-1 block`}>Status Stok</label>
                                         <select value={formProduk.stok} onChange={(e) => setFormProduk({ ...formProduk, stok: e.target.value })}
                                             className={`w-full px-4 py-2 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm ${bgInput}`}>
                                             <option>Tersedia</option>
@@ -320,24 +336,24 @@ function Admin() {
                             </div>
                         )}
 
-                        {/* Tabel Produk */}
                         <div className={`${bgCard} rounded-xl overflow-hidden`}>
                             <table className="w-full text-sm">
                                 <thead className={bgSection}>
                                     <tr>
-                                        {["Icon", "Nama", "Kategori", "Harga", "Stok", "Aksi"].map((h) => (
+                                        {["Icon", "Nama", "Kategori", "Harga", "Stok", "Jumlah", "Aksi"].map((h) => (
                                             <th key={h} className={`px-4 py-3 text-left font-semibold ${textMuted}`}>{h}</th>
                                         ))}
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {produk.map((p, i) => (
-                                        <tr key={p.id} className={`border-t ${isDark ? "border-gray-800" : "border-gray-100"} hover:${bgSection} transition`}>
+                                    {produk.map((p) => (
+                                        <tr key={p.id} className={`border-t ${isDark ? "border-gray-800" : "border-gray-100"} transition`}>
                                             <td className="px-4 py-3 text-2xl">{p.icon}</td>
                                             <td className="px-4 py-3 font-semibold">{p.nama}</td>
                                             <td className="px-4 py-3"><span className="bg-blue-900 text-blue-300 px-2 py-0.5 rounded-full text-xs">{p.kategori}</span></td>
                                             <td className="px-4 py-3 text-blue-500 font-bold">{formatRupiah(p.harga)}</td>
                                             <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded-full ${p.stok === "Tersedia" ? "bg-green-900 text-green-300" : "bg-red-900 text-red-300"}`}>{p.stok}</span></td>
+                                            <td className="px-4 py-3 font-semibold">{p.jumlah_stok} unit</td>
                                             <td className="px-4 py-3">
                                                 <div className="flex gap-2">
                                                     <button onClick={() => handleEditProduk(p)} className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded-full text-xs transition">✏️ Edit</button>
@@ -368,7 +384,7 @@ function Admin() {
                                         <div className={`flex flex-wrap justify-between items-center px-5 py-4 gap-3 ${bgSection}`}>
                                             <div>
                                                 <p className="font-bold">Pesanan #{String(pesanan.id).slice(-6)}</p>
-                                                <p className={`text-xs ${textMuted}`}>{pesanan.tanggal} · {pesanan.jam} · {pesanan.items?.length} produk</p>
+                                                <p className={`text-xs ${textMuted}`}>{pesanan.created_at?.slice(0, 10)} · {pesanan.nama_user} · {pesanan.items?.length} produk</p>
                                             </div>
                                             <div className="flex items-center gap-3 flex-wrap">
                                                 <p className="font-bold text-blue-500">{formatRupiah(pesanan.total)}</p>
@@ -393,11 +409,11 @@ function Admin() {
                                                     <p className="text-blue-500 text-sm font-bold">{formatRupiah(item.harga * item.qty)}</p>
                                                 </div>
                                             ))}
-                                            {pesanan.alamat?.namaPenerima && (
+                                            {pesanan.nama_penerima && (
                                                 <div className={`p-3 rounded-lg text-xs ${bgSection} mt-2`}>
                                                     <p className="font-bold mb-1">📍 Kirim ke:</p>
-                                                    <p className={textMuted}>{pesanan.alamat.namaPenerima} | {pesanan.alamat.noHp}</p>
-                                                    <p className={textMuted}>{pesanan.alamat.jalan}, {pesanan.alamat.kota}</p>
+                                                    <p className={textMuted}>{pesanan.nama_penerima} | {pesanan.no_hp}</p>
+                                                    <p className={textMuted}>{pesanan.jalan}, {pesanan.kota}</p>
                                                 </div>
                                             )}
                                         </div>
@@ -412,15 +428,14 @@ function Admin() {
                 {tab === "keuangan" && (
                     <div>
                         <h2 className="text-2xl font-bold mb-6">💰 Laporan Keuangan</h2>
-
-                        {/* Kartu Keuangan */}
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
                             {[
-                                { label: "Total Pemasukan", value: formatRupiah(totalPemasukan), icon: "📈", warna: "text-green-500", desc: "Dari semua pesanan" },
+                                { label: "Pemasukan Produk", value: formatRupiah(totalPemasuklanProduk || 0), icon: "🛒", warna: "text-green-400", desc: "Dari penjualan produk" },
+                                { label: "Pemasukan Service", value: formatRupiah(totalPemasuklanService || 0), icon: "🔧", warna: "text-blue-400", desc: "Dari booking selesai" },
+                                { label: "Total Pemasukan", value: formatRupiah(totalPemasukan), icon: "📈", warna: "text-green-500", desc: "Produk + Service" },
                                 { label: "HPP (60%)", value: formatRupiah(hpp), icon: "🏷️", warna: "text-yellow-500", desc: "Estimasi modal barang" },
-                                { label: "Laba Kotor", value: formatRupiah(labaKotor), icon: "💵", warna: "text-blue-500", desc: "Pemasukan - HPP" },
                                 { label: "Total Pengeluaran", value: formatRupiah(totalPengeluaran), icon: "📉", warna: "text-red-500", desc: "Operasional & lainnya" },
-                                { label: "Laba Bersih", value: formatRupiah(labaBersih), icon: "🏆", warna: labaBersih >= 0 ? "text-green-500" : "text-red-500", desc: "Laba Kotor - Pengeluaran" },
+                                { label: "Laba Bersih", value: formatRupiah(labaBersih), icon: "🏆", warna: labaBersih >= 0 ? "text-green-500" : "text-red-500", desc: "Setelah semua pengeluaran" },
                             ].map((item, i) => (
                                 <div key={i} className={`${bgCard} rounded-xl p-5`}>
                                     <div className="flex items-center gap-2 mb-2">
@@ -433,17 +448,16 @@ function Admin() {
                             ))}
                         </div>
 
-                        {/* Rumus Perhitungan */}
                         <div className={`${bgCard} rounded-xl p-6 mb-6`}>
                             <h3 className="font-bold mb-4">📐 Rumus Perhitungan</h3>
                             <div className={`${bgSection} rounded-xl p-4 text-sm space-y-2 font-mono`}>
-                                <p>HPP = Pemasukan × 60%</p>
-                                <p>Laba Kotor = Pemasukan - HPP</p>
+                                <p>HPP = Pemasukan Produk × 60%</p>
+                                <p>Total Pemasukan = Produk + Service</p>
+                                <p>Laba Kotor = Total Pemasukan - HPP</p>
                                 <p>Laba Bersih = Laba Kotor - Total Pengeluaran</p>
                             </div>
                         </div>
 
-                        {/* Pengeluaran */}
                         <div className={`${bgCard} rounded-xl p-6`}>
                             <div className="flex justify-between items-center mb-4">
                                 <h3 className="font-bold">📋 Daftar Pengeluaran</h3>
@@ -452,8 +466,6 @@ function Admin() {
                                     {showFormPengeluaran ? "Batal" : "+ Tambah Pengeluaran"}
                                 </button>
                             </div>
-
-                            {/* Form Pengeluaran */}
                             {showFormPengeluaran && (
                                 <div className={`${bgSection} rounded-xl p-4 mb-4 grid grid-cols-1 md:grid-cols-2 gap-3`}>
                                     {[
@@ -483,8 +495,6 @@ function Admin() {
                                     </div>
                                 </div>
                             )}
-
-                            {/* Tabel Pengeluaran */}
                             <div className="space-y-2">
                                 {pengeluaran.map((p) => (
                                     <div key={p.id} className={`flex justify-between items-center p-3 rounded-lg ${bgSection}`}>
@@ -503,6 +513,61 @@ function Admin() {
                     </div>
                 )}
 
+                {/* ═══════════════ BOOKING ═══════════════ */}
+                {tab === "booking" && (
+                    <div>
+                        <h2 className="text-2xl font-bold mb-6">🔧 Kelola Booking Service</h2>
+                        {!semuaBooking?.length ? (
+                            <div className={`${bgCard} rounded-xl p-10 text-center`}>
+                                <p className="text-4xl mb-2">🔧</p>
+                                <p className={textMuted}>Belum ada booking masuk</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {semuaBooking.map((b) => (
+                                    <div key={b.id} className={`${bgCard} rounded-xl overflow-hidden`}>
+                                        <div className={`flex flex-wrap justify-between items-center px-5 py-4 gap-3 ${bgSection}`}>
+                                            <div>
+                                                <p className="font-bold">#{String(b.id).padStart(4, "0")} · {b.nama}</p>
+                                                <p className={`text-xs ${textMuted}`}>{b.created_at?.slice(0, 10)} · {b.email || "Tamu"}</p>
+                                            </div>
+                                            <div className="flex items-center gap-3 flex-wrap">
+                                                <span className="text-xs bg-blue-900 text-blue-300 px-3 py-1 rounded-full font-semibold">{b.paket}</span>
+                                                <select value={b.status}
+                                                    onChange={(e) => updateStatusBooking(b.id, e.target.value)}
+                                                    className={`text-xs px-3 py-1 rounded-full font-semibold outline-none cursor-pointer ${warnaBooking(b.status)}`}>
+                                                    <option>Menunggu</option>
+                                                    <option>Diproses</option>
+                                                    <option>Selesai</option>
+                                                    <option>Dibatalkan</option>
+                                                </select>
+                                                <button onClick={() => { if (window.confirm(`Hapus booking ${b.nama}?`)) hapusBooking(b.id); }}
+                                                    className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-full text-xs transition">
+                                                    🗑️ Hapus
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div className="px-5 py-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            {[
+                                                { label: "HP", value: b.hp },
+                                                { label: "Perangkat", value: b.perangkat },
+                                                { label: "Paket", value: b.paket },
+                                                { label: "Tgl Pengerjaan", value: b.tanggal_pengerjaan?.slice(0, 10) || "-" },
+                                                { label: "Keluhan", value: b.keluhan },
+                                            ].map((item, i) => (
+                                                <div key={i} className={`p-3 rounded-lg ${bgSection}`}>
+                                                    <p className={`text-xs ${textMuted} mb-1`}>{item.label}</p>
+                                                    <p className="text-sm font-semibold">{item.value}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* ═══════════════ PENGGUNA ═══════════════ */}
                 {tab === "pengguna" && (
                     <div>
@@ -517,22 +582,29 @@ function Admin() {
                                 <table className="w-full text-sm">
                                     <thead className={bgSection}>
                                         <tr>
-                                            {["#", "Nama", "Email", "Aksi"].map((h) => (
+                                            {["#", "Nama", "Email", "Role", "Aksi"].map((h) => (
                                                 <th key={h} className={`px-4 py-3 text-left font-semibold ${textMuted}`}>{h}</th>
                                             ))}
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {pengguna.map((p, i) => (
-                                            <tr key={i} className={`border-t ${isDark ? "border-gray-800" : "border-gray-100"}`}>
+                                            <tr key={p.id} className={`border-t ${isDark ? "border-gray-800" : "border-gray-100"}`}>
                                                 <td className={`px-4 py-3 ${textMuted}`}>{i + 1}</td>
                                                 <td className="px-4 py-3 font-semibold">👤 {p.nama}</td>
                                                 <td className={`px-4 py-3 ${textMuted}`}>{p.email}</td>
                                                 <td className="px-4 py-3">
-                                                    <button onClick={() => { if (window.confirm(`Hapus pengguna ${p.nama}?`)) hapusPengguna(p.email); }}
-                                                        className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-full text-xs transition">
-                                                        🗑️ Hapus
-                                                    </button>
+                                                    <span className={`text-xs px-2 py-0.5 rounded-full ${p.role === "admin" ? "bg-blue-900 text-blue-300" : "bg-gray-700 text-gray-300"}`}>
+                                                        {p.role}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    {p.role !== "admin" && (
+                                                        <button onClick={() => { if (window.confirm(`Hapus pengguna ${p.nama}?`)) hapusPengguna(p.id); }}
+                                                            className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-full text-xs transition">
+                                                            🗑️ Hapus
+                                                        </button>
+                                                    )}
                                                 </td>
                                             </tr>
                                         ))}

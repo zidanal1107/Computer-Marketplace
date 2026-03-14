@@ -1,13 +1,18 @@
 import { useEffect, useState } from "react";
 import { animate, stagger } from "animejs";
 import { useTheme } from "../context/ThemeContext";
+import { useAuth } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import API_URL from "../config/api";
 
 function Service() {
-    const [form, setForm] = useState({ nama: "", hp: "", perangkat: "", keluhan: "", paket: "" });
+    const [form, setForm] = useState({ nama: "", hp: "", perangkat: "", keluhan: "", paket: "", tanggal_pengerjaan: "" });
     const [terkirim, setTerkirim] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
     const { isDark } = useTheme();
+    const { user, token } = useAuth();
 
     const bg = isDark ? "bg-gray-950 text-white" : "bg-gray-50 text-gray-800";
     const bgCard = isDark ? "bg-gray-900" : "bg-white border border-gray-200";
@@ -22,19 +27,47 @@ function Service() {
             delay: stagger(100),
             easing: "easeOutExpo",
         });
+        if (user) {
+            setForm((prev) => ({ ...prev, nama: user.nama }));
+        }
     }, []);
 
-    const handleSubmit = () => {
-        if (!form.nama || !form.hp || !form.perangkat || !form.keluhan || !form.paket) {
-            alert("Harap isi semua field!");
+    const handleSubmit = async () => {
+        if (!form.nama || !form.hp || !form.perangkat || !form.keluhan || !form.paket || !form.tanggal_pengerjaan) {
+            setError("Harap isi semua field!");
+            setTimeout(() => setError(""), 3000);
             return;
         }
-        setTerkirim(true);
+        setLoading(true);
+        setError("");
+        try {
+            const headers = { "Content-Type": "application/json" };
+            if (token) headers["Authorization"] = `Bearer ${token}`;
+            const res = await fetch(`${API_URL}/booking`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify(form),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message);
+            setTerkirim(true);
+        } catch (err) {
+            setError(err.message);
+            setTimeout(() => setError(""), 3000);
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
         <div className={`min-h-screen ${bg}`}>
             <Navbar />
+
+            {error && (
+                <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-white px-6 py-3 rounded-full shadow-lg text-sm font-semibold">
+                    ⚠️ {error}
+                </div>
+            )}
 
             <section className={`px-6 py-12 text-center ${isDark ? "bg-gradient-to-b from-blue-950 to-gray-950" : "bg-gradient-to-b from-blue-100 to-gray-50"}`}>
                 <h1 className="fade-up opacity-0 text-3xl md:text-4xl font-bold mb-3">
@@ -43,6 +76,7 @@ function Service() {
                 <p className={`fade-up opacity-0 ${textMuted}`}>Teknisi berpengalaman siap membantu masalah perangkat kamu</p>
             </section>
 
+            {/* Paket Service */}
             <section className="px-6 py-12 max-w-6xl mx-auto">
                 <h2 className="text-2xl font-bold text-center mb-8">Pilih Paket Service</h2>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -65,6 +99,7 @@ function Service() {
                 </div>
             </section>
 
+            {/* Form Booking */}
             <section className="px-6 py-12 max-w-2xl mx-auto">
                 <h2 className="text-2xl font-bold text-center mb-8">📋 Form Booking Service</h2>
                 {terkirim ? (
@@ -72,7 +107,7 @@ function Service() {
                         <p className="text-4xl mb-4">✅</p>
                         <h3 className="text-xl font-bold mb-2">Booking Berhasil!</h3>
                         <p className={textMuted}>Terima kasih <span className="text-white font-semibold">{form.nama}</span>! Kami akan menghubungi kamu di <span className="text-white font-semibold">{form.hp}</span> segera.</p>
-                        <button onClick={() => { setTerkirim(false); setForm({ nama: "", hp: "", perangkat: "", keluhan: "", paket: "" }); }}
+                        <button onClick={() => { setTerkirim(false); setForm({ nama: user?.nama || "", hp: "", perangkat: "", keluhan: "", paket: "", tanggal_pengerjaan: "" }); }}
                             className="mt-6 bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-full font-semibold transition">
                             Booking Lagi
                         </button>
@@ -84,6 +119,7 @@ function Service() {
                             { label: "Nomor HP / WhatsApp", key: "hp", placeholder: "Contoh: 0812-3456-7890", type: "input" },
                             { label: "Jenis Perangkat", key: "perangkat", placeholder: "Contoh: Laptop ASUS VivoBook", type: "input" },
                             { label: "Keluhan", key: "keluhan", placeholder: "Contoh: Laptop sering mati sendiri", type: "textarea" },
+                            { label: "Tanggal Pengerjaan", key: "tanggal_pengerjaan", placeholder: "", type: "date" },
                         ].map((field, i) => (
                             <div key={i}>
                                 <label className={`text-sm ${textMuted} mb-1 block`}>{field.label}</label>
@@ -91,13 +127,20 @@ function Service() {
                                     <input type="text" placeholder={field.placeholder} value={form[field.key]}
                                         onChange={(e) => setForm({ ...form, [field.key]: e.target.value })}
                                         className={`w-full px-4 py-3 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 ${bgInput}`} />
-                                ) : (
+                                ) : field.type === "textarea" ? (
                                     <textarea placeholder={field.placeholder} value={form[field.key]}
                                         onChange={(e) => setForm({ ...form, [field.key]: e.target.value })}
                                         rows={3} className={`w-full px-4 py-3 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 resize-none ${bgInput}`} />
-                                )}
+                                ) : field.type === "date" ? (
+                                    <input type="date" value={form[field.key]}
+                                        min={new Date().toISOString().split("T")[0]}
+                                        onChange={(e) => setForm({ ...form, [field.key]: e.target.value })}
+                                        className={`w-full px-4 py-3 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 ${bgInput}`} />
+                                ) : null}
                             </div>
                         ))}
+
+                        {/* Paket Service */}
                         <div>
                             <label className={`text-sm ${textMuted} mb-1 block`}>Paket Service</label>
                             <select value={form.paket} onChange={(e) => setForm({ ...form, paket: e.target.value })}
@@ -108,8 +151,10 @@ function Service() {
                                 <option value="Service Berat">Service Berat - Rp 300.000</option>
                             </select>
                         </div>
-                        <button onClick={handleSubmit} className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-full font-semibold transition">
-                            Kirim Booking 🚀
+
+                        <button onClick={handleSubmit} disabled={loading}
+                            className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-blue-800 text-white py-3 rounded-full font-semibold transition">
+                            {loading ? "Mengirim..." : "Kirim Booking 🚀"}
                         </button>
                     </div>
                 )}

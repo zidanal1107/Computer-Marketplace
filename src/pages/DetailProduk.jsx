@@ -6,32 +6,29 @@ import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
-import dataProduk from "../data/produk";
+import API_URL from "../config/api";
 
 function DetailProduk() {
     const { id } = useParams();
     const navigate = useNavigate();
     const { keranjang, tambahKeranjang } = useKeranjang();
     const { isDark } = useTheme();
-    const { user } = useAuth();
+    const { user, token } = useAuth();
 
-    const produk = dataProduk.find((p) => p.id === parseInt(id));
+    const [produk, setProduk] = useState(null);
+    const [rekomendasi, setRekomendasi] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
 
-    // Wishlist
     const [wishlist, setWishlist] = useState(() => {
         const saved = localStorage.getItem("wishlist");
         return saved ? JSON.parse(saved) : [];
     });
 
-    // Ulasan
-    const [ulasan, setUlasan] = useState(() => {
-        const saved = localStorage.getItem(`ulasan_${id}`);
-        return saved ? JSON.parse(saved) : [];
-    });
+    const [ulasan, setUlasan] = useState([]);
     const [formUlasan, setFormUlasan] = useState({ rating: 5, komentar: "" });
     const [notifUlasan, setNotifUlasan] = useState("");
-
-    // Notif tambah keranjang
+    const [loadingUlasan, setLoadingUlasan] = useState(false);
     const [notif, setNotif] = useState("");
 
     const bg = isDark ? "bg-gray-950 text-white" : "bg-gray-50 text-gray-800";
@@ -40,23 +37,71 @@ function DetailProduk() {
     const bgInput = isDark ? "bg-gray-800 text-white placeholder-gray-500" : "bg-gray-100 text-gray-800 placeholder-gray-400";
     const textMuted = isDark ? "text-gray-400" : "text-gray-500";
 
-    useEffect(() => {
-        animate(".detail-content", {
-            opacity: { from: 0, to: 1 },
-            translateY: { from: 30, to: 0 },
-            duration: 700,
-            easing: "easeOutExpo",
-        });
-        window.scrollTo(0, 0);
+    // Fetch ulasan dari API
+    const fetchUlasan = async () => {
+        try {
+            const res = await fetch(`${API_URL}/ulasan/${id}`);
+            const data = await res.json();
+            setUlasan(Array.isArray(data) ? data : []);
+        } catch (err) {
+            console.error(err);
+        }
+    };
 
-        // Load ulasan sesuai produk
-        const saved = localStorage.getItem(`ulasan_${id}`);
-        setUlasan(saved ? JSON.parse(saved) : []);
+    // Fetch produk dari API
+    useEffect(() => {
+        const fetchProduk = async () => {
+            setLoading(true);
+            setError("");
+            try {
+                const res = await fetch(`${API_URL}/produk/${id}`);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message);
+                setProduk(data);
+
+                const resAll = await fetch(`${API_URL}/produk`);
+                const allProduk = await resAll.json();
+                const rek = allProduk
+                    .filter((p) => p.kategori === data.kategori && p.id !== data.id)
+                    .slice(0, 4);
+                setRekomendasi(rek);
+            } catch (err) {
+                setError("Produk tidak ditemukan");
+                console.error(err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchProduk();
+        fetchUlasan();
+        window.scrollTo(0, 0);
     }, [id]);
 
-    if (!produk) {
+    useEffect(() => {
+        if (!loading && produk) {
+            animate(".detail-content", {
+                opacity: { from: 0, to: 1 },
+                translateY: { from: 30, to: 0 },
+                duration: 700,
+                easing: "easeOutExpo",
+            });
+        }
+    }, [loading, produk]);
+
+    if (loading) {
         return (
             <div className={`min-h-screen ${bg} flex flex-col items-center justify-center gap-4`}>
+                <p className="text-6xl animate-bounce">⏳</p>
+                <p className={textMuted}>Memuat produk...</p>
+            </div>
+        );
+    }
+
+    if (error || !produk) {
+        return (
+            <div className={`min-h-screen ${bg} flex flex-col items-center justify-center gap-4`}>
+                <Navbar />
                 <p className="text-6xl">😕</p>
                 <h2 className="text-2xl font-bold">Produk tidak ditemukan</h2>
                 <button onClick={() => navigate("/produk")} className="bg-blue-500 hover:bg-blue-600 text-white px-8 py-3 rounded-full font-semibold transition">
@@ -68,15 +113,13 @@ function DetailProduk() {
 
     const sudahAda = keranjang.find((p) => p.id === produk.id);
     const diWishlist = wishlist.includes(produk.id);
-    const formatRupiah = (num) => "Rp " + num.toLocaleString("id-ID");
-    const rekomendasi = dataProduk.filter((p) => p.kategori === produk.kategori && p.id !== produk.id).slice(0, 4);
+    const stokHabis = produk.jumlah_stok <= 0;
+    const formatRupiah = (num) => "Rp " + Number(num).toLocaleString("id-ID");
 
-    // Rata-rata rating
     const rataRating = ulasan.length > 0
         ? (ulasan.reduce((acc, u) => acc + u.rating, 0) / ulasan.length).toFixed(1)
         : null;
 
-    // Toggle wishlist
     const handleWishlist = () => {
         const updated = diWishlist
             ? wishlist.filter((w) => w !== produk.id)
@@ -85,15 +128,18 @@ function DetailProduk() {
         localStorage.setItem("wishlist", JSON.stringify(updated));
     };
 
-    // Tambah ke keranjang + notif
     const handleTambahKeranjang = () => {
+        if (stokHabis) {
+            setNotif("❌ Stok produk habis!");
+            setTimeout(() => setNotif(""), 2500);
+            return;
+        }
         tambahKeranjang(produk);
         setNotif("✅ Ditambahkan ke keranjang!");
         setTimeout(() => setNotif(""), 2500);
     };
 
-    // Kirim ulasan
-    const handleKirimUlasan = () => {
+    const handleKirimUlasan = async () => {
         if (!user) {
             setNotifUlasan("⚠️ Kamu harus login untuk memberi ulasan!");
             setTimeout(() => setNotifUlasan(""), 3000);
@@ -104,22 +150,43 @@ function DetailProduk() {
             setTimeout(() => setNotifUlasan(""), 3000);
             return;
         }
-        const ulasanBaru = {
-            id: Date.now(),
-            nama: user.nama,
-            rating: formUlasan.rating,
-            komentar: formUlasan.komentar,
-            tanggal: new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }),
-        };
-        const updated = [ulasanBaru, ...ulasan];
-        setUlasan(updated);
-        localStorage.setItem(`ulasan_${id}`, JSON.stringify(updated));
-        setFormUlasan({ rating: 5, komentar: "" });
-        setNotifUlasan("✅ Ulasan berhasil dikirim!");
-        setTimeout(() => setNotifUlasan(""), 3000);
+        setLoadingUlasan(true);
+        try {
+            const res = await fetch(`${API_URL}/ulasan/${id}`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify(formUlasan),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message);
+            setFormUlasan({ rating: 5, komentar: "" });
+            setNotifUlasan("✅ Ulasan berhasil dikirim!");
+            setTimeout(() => setNotifUlasan(""), 3000);
+            fetchUlasan();
+        } catch (err) {
+            setNotifUlasan("⚠️ " + err.message);
+            setTimeout(() => setNotifUlasan(""), 3000);
+        } finally {
+            setLoadingUlasan(false);
+        }
     };
 
-    // Render bintang
+    const handleHapusUlasan = async (ulasanId) => {
+        if (!window.confirm("Hapus ulasan ini?")) return;
+        try {
+            await fetch(`${API_URL}/ulasan/${ulasanId}`, {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            fetchUlasan();
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
     const renderBintang = (rating, size = "text-base") => {
         return Array.from({ length: 5 }, (_, i) => (
             <span key={i} className={`${size} ${i < rating ? "text-yellow-400" : "text-gray-600"}`}>★</span>
@@ -129,9 +196,8 @@ function DetailProduk() {
     return (
         <div className={`min-h-screen ${bg}`}>
 
-            {/* Notif toast */}
             {notif && (
-                <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white px-6 py-3 rounded-full shadow-lg text-sm font-semibold">
+                <div className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-full shadow-lg text-sm font-semibold text-white ${notif.startsWith("❌") ? "bg-red-600" : "bg-green-600"}`}>
                     {notif}
                 </div>
             )}
@@ -146,7 +212,7 @@ function DetailProduk() {
                     <span>/</span>
                     <button onClick={() => navigate("/produk")} className="hover:text-blue-500 transition">Produk</button>
                     <span>/</span>
-                    <button onClick={() => navigate(`/produk?kategori=${produk.kategori}`)} className="hover:text-blue-500 transition">{produk.kategori}</button>
+                    <span className="text-blue-400">{produk.kategori}</span>
                     <span>/</span>
                     <span className="text-blue-500 truncate max-w-32">{produk.nama}</span>
                 </div>
@@ -161,7 +227,6 @@ function DetailProduk() {
                             <div className={`${bgSection} rounded-2xl flex items-center justify-center p-10 text-9xl`}>
                                 {produk.icon}
                             </div>
-                            {/* Tombol Wishlist */}
                             <button
                                 onClick={handleWishlist}
                                 className={`absolute top-4 right-4 w-10 h-10 rounded-full flex items-center justify-center text-xl transition shadow ${diWishlist ? "bg-red-500 text-white" : isDark ? "bg-gray-700 text-gray-400 hover:bg-red-500 hover:text-white" : "bg-white text-gray-400 hover:bg-red-500 hover:text-white"}`}
@@ -174,7 +239,6 @@ function DetailProduk() {
                         {/* Info */}
                         <div className="flex flex-col justify-between">
                             <div>
-                                {/* Badge kategori + rating */}
                                 <div className="flex items-center gap-2 mb-3 flex-wrap">
                                     <span className="text-xs bg-blue-900 text-blue-300 px-3 py-1 rounded-full">{produk.kategori}</span>
                                     {rataRating && (
@@ -194,11 +258,11 @@ function DetailProduk() {
                                         { label: "Spek", value: produk.spek },
                                         { label: "Garansi", value: produk.garansi },
                                         { label: "Berat", value: produk.berat },
-                                        { label: "Stok", value: produk.stok },
+                                        { label: "Stok", value: stokHabis ? "Habis" : `${produk.jumlah_stok} unit` },
                                     ].map((item, i) => (
                                         <div key={i} className="flex justify-between text-sm">
                                             <span className={textMuted}>{item.label}</span>
-                                            <span className={`font-semibold ${item.label === "Stok" ? "text-green-500" : ""}`}>
+                                            <span className={`font-semibold ${item.label === "Stok" ? stokHabis ? "text-red-400" : "text-green-500" : ""}`}>
                                                 {item.label === "Garansi" ? `🛡️ ${item.value}` : item.value}
                                             </span>
                                         </div>
@@ -212,13 +276,15 @@ function DetailProduk() {
                                 <div className="flex gap-3">
                                     <button
                                         onClick={handleTambahKeranjang}
-                                        className={`flex-1 py-3 rounded-full font-semibold transition text-white ${sudahAda ? "bg-green-600 hover:bg-green-700" : "bg-blue-500 hover:bg-blue-600"}`}
+                                        disabled={stokHabis}
+                                        className={`flex-1 py-3 rounded-full font-semibold transition text-white ${stokHabis ? "bg-gray-500 cursor-not-allowed" : sudahAda ? "bg-green-600 hover:bg-green-700" : "bg-blue-500 hover:bg-blue-600"}`}
                                     >
-                                        {sudahAda ? `✓ Di Keranjang (${sudahAda.qty})` : "+ Tambah ke Keranjang"}
+                                        {stokHabis ? "Stok Habis" : sudahAda ? `✓ Di Keranjang (${sudahAda.qty})` : "+ Tambah ke Keranjang"}
                                     </button>
                                     <button
-                                        onClick={() => { tambahKeranjang(produk); navigate("/keranjang"); }}
-                                        className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-full font-semibold transition"
+                                        onClick={() => { if (!stokHabis) { tambahKeranjang(produk); navigate("/keranjang"); } }}
+                                        disabled={stokHabis}
+                                        className={`flex-1 py-3 rounded-full font-semibold transition text-white ${stokHabis ? "bg-gray-500 cursor-not-allowed" : "bg-orange-500 hover:bg-orange-600"}`}
                                     >
                                         🛒 Beli Sekarang
                                     </button>
@@ -257,7 +323,6 @@ function DetailProduk() {
                     <div className={`${bgCard} rounded-2xl p-6`}>
                         <h2 className="text-lg font-bold mb-4">⭐ Rating & Ulasan</h2>
 
-                        {/* Notif ulasan */}
                         {notifUlasan && (
                             <div className={`px-4 py-3 rounded-lg text-sm mb-4 ${notifUlasan.startsWith("⚠️") ? "bg-red-900 border border-red-500 text-red-300" : "bg-green-900 border border-green-500 text-green-300"}`}>
                                 {notifUlasan}
@@ -293,8 +358,6 @@ function DetailProduk() {
                         {/* Form tulis ulasan */}
                         <div className={`${bgSection} rounded-xl p-4 mb-6`}>
                             <p className="font-semibold text-sm mb-3">✍️ Tulis Ulasan</p>
-
-                            {/* Pilih rating bintang */}
                             <div className="flex gap-1 mb-3">
                                 {[1, 2, 3, 4, 5].map((star) => (
                                     <button key={star} onClick={() => setFormUlasan({ ...formUlasan, rating: star })}
@@ -304,7 +367,6 @@ function DetailProduk() {
                                 ))}
                                 <span className={`text-sm ml-2 ${textMuted} self-center`}>{formUlasan.rating}/5</span>
                             </div>
-
                             <textarea
                                 placeholder={user ? "Tulis pengalaman kamu dengan produk ini..." : "Login dulu untuk menulis ulasan"}
                                 value={formUlasan.komentar}
@@ -321,10 +383,10 @@ function DetailProduk() {
                                 )}
                                 <button
                                     onClick={handleKirimUlasan}
-                                    disabled={!user}
+                                    disabled={!user || loadingUlasan}
                                     className="ml-auto bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-6 py-2 rounded-full text-sm font-semibold transition"
                                 >
-                                    Kirim Ulasan
+                                    {loadingUlasan ? "Mengirim..." : "Kirim Ulasan"}
                                 </button>
                             </div>
                         </div>
@@ -342,9 +404,23 @@ function DetailProduk() {
                                         <div className="flex justify-between items-start mb-2">
                                             <div>
                                                 <p className="font-semibold text-sm">👤 {u.nama}</p>
-                                                <p className={`text-xs ${textMuted}`}>{u.tanggal}</p>
+                                                <p className={`text-xs ${textMuted}`}>
+                                                    {new Date(u.created_at).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
+                                                </p>
                                             </div>
-                                            <div className="flex">{renderBintang(u.rating, "text-sm")}</div>
+                                            <div className="flex items-center gap-2">
+                                                <div className="flex">{renderBintang(u.rating, "text-sm")}</div>
+                                                {/* Tombol hapus hanya untuk pemilik ulasan */}
+                                                {user && user.id === u.user_id && (
+                                                    <button
+                                                        onClick={() => handleHapusUlasan(u.id)}
+                                                        className="text-red-400 hover:text-red-300 text-xs transition"
+                                                        title="Hapus ulasan"
+                                                    >
+                                                        🗑️
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                         <p className={`text-sm ${textMuted}`}>{u.komentar}</p>
                                     </div>
@@ -353,27 +429,31 @@ function DetailProduk() {
                         )}
                     </div>
 
-                    {/* ── Rekomendasi Produk ── */}
+                    {/* ── Rekomendasi ── */}
                     {rekomendasi.length > 0 && (
                         <div className={`${bgCard} rounded-2xl p-6`}>
                             <h2 className="text-xl font-bold mb-4">Produk Serupa</h2>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 {rekomendasi.map((item) => {
                                     const adaRek = keranjang.find((p) => p.id === item.id);
+                                    const rekHabis = item.jumlah_stok <= 0;
                                     return (
                                         <div key={item.id} className={`${bgSection} rounded-xl p-4 hover:shadow-lg transition cursor-pointer`}
                                             onClick={() => navigate(`/produk/${item.id}`)}>
                                             <div className="text-4xl text-center mb-2">{item.icon}</div>
                                             <h3 className="text-sm font-bold mb-1 line-clamp-2">{item.nama}</h3>
                                             <p className={`text-xs ${textMuted} mb-1`}>{item.spek}</p>
-                                            {/* Garansi rekomendasi */}
                                             <p className={`text-xs ${textMuted} mb-2`}>🛡️ {item.garansi}</p>
+                                            <p className={`text-xs mb-2 ${rekHabis ? "text-red-400" : "text-green-500"}`}>
+                                                {rekHabis ? "❌ Habis" : `✅ ${item.jumlah_stok} unit`}
+                                            </p>
                                             <p className="text-blue-500 font-bold text-sm mb-2">{formatRupiah(item.harga)}</p>
                                             <button
-                                                onClick={(e) => { e.stopPropagation(); tambahKeranjang(item); }}
-                                                className={`w-full text-xs py-1.5 rounded-full font-semibold transition text-white ${adaRek ? "bg-green-600 hover:bg-green-700" : "bg-blue-500 hover:bg-blue-600"}`}
+                                                onClick={(e) => { e.stopPropagation(); if (!rekHabis) tambahKeranjang(item); }}
+                                                disabled={rekHabis}
+                                                className={`w-full text-xs py-1.5 rounded-full font-semibold transition text-white ${rekHabis ? "bg-gray-500 cursor-not-allowed" : adaRek ? "bg-green-600 hover:bg-green-700" : "bg-blue-500 hover:bg-blue-600"}`}
                                             >
-                                                {adaRek ? `✓ ${adaRek.qty}` : "+ Beli"}
+                                                {rekHabis ? "Habis" : adaRek ? `✓ ${adaRek.qty}` : "+ Beli"}
                                             </button>
                                         </div>
                                     );

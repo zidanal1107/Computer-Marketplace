@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useKeranjang } from "../context/KeranjangContext";
 import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
-import dataProduk from "../data/produk";
+import API_URL from "../config/api";
 
 function Wishlist() {
     const navigate = useNavigate();
@@ -17,16 +17,40 @@ function Wishlist() {
         const saved = localStorage.getItem("wishlist");
         return saved ? JSON.parse(saved) : [];
     });
+    const [produkWishlist, setProdukWishlist] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [notif, setNotif] = useState("");
 
     const bg = isDark ? "bg-gray-950 text-white" : "bg-gray-50 text-gray-800";
     const bgCard = isDark ? "bg-gray-900" : "bg-white border border-gray-200";
     const textMuted = isDark ? "text-gray-400" : "text-gray-500";
 
-    const formatRupiah = (num) => "Rp " + num.toLocaleString("id-ID");
+    const formatRupiah = (num) => "Rp " + Number(num).toLocaleString("id-ID");
 
-    // Ambil data produk yang ada di wishlist
-    const produkWishlist = dataProduk.filter((p) => wishlist.includes(p.id));
+    // Fetch produk wishlist dari API
+    useEffect(() => {
+        const fetchProdukWishlist = async () => {
+            if (wishlist.length === 0) {
+                setProdukWishlist([]);
+                setLoading(false);
+                return;
+            }
+            setLoading(true);
+            try {
+                const res = await fetch(`${API_URL}/produk`);
+                const data = await res.json();
+                const filtered = Array.isArray(data)
+                    ? data.filter((p) => wishlist.includes(p.id))
+                    : [];
+                setProdukWishlist(filtered);
+            } catch (err) {
+                console.error(err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchProdukWishlist();
+    }, [wishlist]);
 
     const hapusDariWishlist = (id) => {
         const updated = wishlist.filter((w) => w !== id);
@@ -37,21 +61,31 @@ function Wishlist() {
     const kosongkanWishlist = () => {
         setWishlist([]);
         localStorage.removeItem("wishlist");
+        setProdukWishlist([]);
     };
 
     const handleTambahKeranjang = (produk) => {
+        if (produk.jumlah_stok <= 0) {
+            setNotif(`❌ Stok ${produk.nama} habis!`);
+            setTimeout(() => setNotif(""), 2500);
+            return;
+        }
         tambahKeranjang(produk);
         setNotif(`✅ ${produk.nama} ditambahkan ke keranjang!`);
         setTimeout(() => setNotif(""), 2500);
     };
 
     const handleTambahSemuaKeranjang = () => {
-        produkWishlist.forEach((p) => tambahKeranjang(p));
-        setNotif("✅ Semua produk wishlist ditambahkan ke keranjang!");
+        const tersedia = produkWishlist.filter((p) => p.jumlah_stok > 0);
+        tersedia.forEach((p) => tambahKeranjang(p));
+        if (tersedia.length === 0) {
+            setNotif("❌ Semua produk wishlist sedang habis stok!");
+        } else {
+            setNotif(`✅ ${tersedia.length} produk ditambahkan ke keranjang!`);
+        }
         setTimeout(() => setNotif(""), 2500);
     };
 
-    // Redirect kalau belum login
     if (!user) {
         return (
             <div className={`min-h-screen ${bg} flex flex-col items-center justify-center gap-4`}>
@@ -68,16 +102,14 @@ function Wishlist() {
     return (
         <div className={`min-h-screen ${bg}`}>
 
-            {/* Notif toast */}
             {notif && (
-                <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white px-6 py-3 rounded-full shadow-lg text-sm font-semibold">
+                <div className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-full shadow-lg text-sm font-semibold text-white ${notif.startsWith("❌") ? "bg-red-600" : "bg-green-600"}`}>
                     {notif}
                 </div>
             )}
 
             <Navbar />
 
-            {/* Header */}
             <section className={`px-6 py-12 text-center ${isDark ? "bg-gradient-to-b from-blue-950 to-gray-950" : "bg-gradient-to-b from-blue-100 to-gray-50"}`}>
                 <h1 className="text-3xl md:text-4xl font-bold mb-2">❤️ Wishlist <span className="text-blue-500">Saya</span></h1>
                 <p className={textMuted}>Produk yang kamu simpan untuk dibeli nanti</p>
@@ -85,8 +117,14 @@ function Wishlist() {
 
             <section className="px-6 py-10 max-w-5xl mx-auto">
 
-                {/* Kosong */}
-                {produkWishlist.length === 0 ? (
+                {/* Loading */}
+                {loading ? (
+                    <div className="text-center py-20">
+                        <p className="text-4xl animate-bounce mb-2">⏳</p>
+                        <p className={textMuted}>Memuat wishlist...</p>
+                    </div>
+
+                ) : produkWishlist.length === 0 ? (
                     <div className="text-center py-20">
                         <p className="text-6xl mb-4">🤍</p>
                         <h3 className="text-xl font-bold mb-2">Wishlist Kosong</h3>
@@ -95,6 +133,7 @@ function Wishlist() {
                             Jelajahi Produk
                         </button>
                     </div>
+
                 ) : (
                     <>
                         {/* Toolbar */}
@@ -120,6 +159,7 @@ function Wishlist() {
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             {produkWishlist.map((produk) => {
                                 const sudahAda = keranjang.find((p) => p.id === produk.id);
+                                const stokHabis = produk.jumlah_stok <= 0;
                                 return (
                                     <div key={produk.id} className={`${bgCard} rounded-xl p-4 flex flex-col hover:shadow-lg transition relative`}>
 
@@ -132,42 +172,38 @@ function Wishlist() {
                                             ✕
                                         </button>
 
-                                        {/* Icon klik ke detail */}
-                                        <div
-                                            onClick={() => navigate(`/produk/${produk.id}`)}
-                                            className="text-4xl md:text-5xl text-center mb-3 cursor-pointer"
-                                        >
+                                        {/* Icon */}
+                                        <div onClick={() => navigate(`/produk/${produk.id}`)}
+                                            className="text-4xl md:text-5xl text-center mb-3 cursor-pointer">
                                             {produk.icon}
                                         </div>
 
                                         {/* Badge kategori */}
                                         <span className="text-xs bg-blue-900 text-blue-300 px-2 py-1 rounded-full w-fit mb-2">{produk.kategori}</span>
 
-                                        {/* Nama produk */}
-                                        <h3
-                                            onClick={() => navigate(`/produk/${produk.id}`)}
-                                            className="text-sm md:text-base font-bold mb-1 cursor-pointer hover:text-blue-500 transition line-clamp-2"
-                                        >
+                                        {/* Nama */}
+                                        <h3 onClick={() => navigate(`/produk/${produk.id}`)}
+                                            className="text-sm md:text-base font-bold mb-1 cursor-pointer hover:text-blue-500 transition line-clamp-2">
                                             {produk.nama}
                                         </h3>
 
-                                        {/* Spek */}
                                         <p className={`text-xs ${textMuted} mb-1`}>{produk.spek}</p>
-
-                                        {/* Garansi */}
                                         <p className={`text-xs ${textMuted} mb-2`}>🛡️ {produk.garansi}</p>
 
                                         {/* Stok */}
-                                        <p className="text-green-500 text-xs mb-3">✅ {produk.stok}</p>
+                                        <p className={`text-xs mb-3 ${stokHabis ? "text-red-400" : "text-green-500"}`}>
+                                            {stokHabis ? "❌ Stok Habis" : `✅ ${produk.jumlah_stok} unit`}
+                                        </p>
 
                                         {/* Harga + tombol */}
                                         <div className="mt-auto space-y-2">
                                             <p className="text-blue-500 font-bold text-sm">{formatRupiah(produk.harga)}</p>
                                             <button
                                                 onClick={() => handleTambahKeranjang(produk)}
-                                                className={`w-full py-2 rounded-full text-xs font-semibold transition text-white ${sudahAda ? "bg-green-600 hover:bg-green-700" : "bg-blue-500 hover:bg-blue-600"}`}
+                                                disabled={stokHabis}
+                                                className={`w-full py-2 rounded-full text-xs font-semibold transition text-white ${stokHabis ? "bg-gray-500 cursor-not-allowed" : sudahAda ? "bg-green-600 hover:bg-green-700" : "bg-blue-500 hover:bg-blue-600"}`}
                                             >
-                                                {sudahAda ? `✓ Di Keranjang (${sudahAda.qty})` : "+ Tambah ke Keranjang"}
+                                                {stokHabis ? "Habis" : sudahAda ? `✓ Di Keranjang (${sudahAda.qty})` : "+ Tambah ke Keranjang"}
                                             </button>
                                         </div>
                                     </div>

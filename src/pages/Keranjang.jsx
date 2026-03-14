@@ -2,16 +2,18 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useKeranjang } from "../context/KeranjangContext";
 import { useTheme } from "../context/ThemeContext";
-import { useAuth } from "../context/AuthContext"; // ← tambah import useAuth
+import { useAuth } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 
 function Keranjang() {
     const [checkout, setCheckout] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
     const navigate = useNavigate();
     const { keranjang, kurangQty, tambahKeranjang, hapusProduk, kosongkanKeranjang, totalHarga, simpanPesanan } = useKeranjang();
     const { isDark } = useTheme();
-    const { user } = useAuth(); // ← ambil data user
+    const { user, token } = useAuth();
 
     const alamatTersimpan = JSON.parse(localStorage.getItem("alamat_pengiriman") || "null");
 
@@ -23,32 +25,30 @@ function Keranjang() {
 
     const formatRupiah = (num) => "Rp " + num.toLocaleString("id-ID");
 
-    // Cek kondisi sebelum checkout
     const belumLogin = !user;
     const belumAlamat = !alamatTersimpan?.namaPenerima;
     const bisaCheckout = !belumLogin && !belumAlamat;
 
-    const handleCheckout = () => {
-        // Blokir kalau belum login
-        if (belumLogin) {
-            navigate("/login");
-            return;
+    const handleCheckout = async () => {
+        if (belumLogin) { navigate("/login"); return; }
+        if (belumAlamat) { navigate("/profil"); return; }
+
+        setLoading(true);
+        setError("");
+        try {
+            await simpanPesanan(keranjang, totalHarga, alamatTersimpan, token);
+            setCheckout(true);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
         }
-        // Blokir kalau belum isi alamat
-        if (belumAlamat) {
-            navigate("/profil");
-            return;
-        }
-        simpanPesanan(keranjang, totalHarga, alamatTersimpan);
-        kosongkanKeranjang();
-        setCheckout(true);
     };
 
     return (
         <div className={`min-h-screen ${bg}`}>
             <Navbar />
 
-            {/* Header */}
             <section className={`px-6 py-10 text-center ${isDark ? "bg-gradient-to-b from-blue-950 to-gray-950" : "bg-gradient-to-b from-blue-100 to-gray-50"}`}>
                 <h1 className="text-3xl md:text-4xl font-bold mb-2">🛒 Keranjang <span className="text-blue-500">Belanja</span></h1>
                 <p className={textMuted}>Periksa pesanan kamu sebelum checkout</p>
@@ -56,14 +56,12 @@ function Keranjang() {
 
             <section className="px-6 py-10 max-w-5xl mx-auto">
 
-                {/* State: Checkout Sukses */}
                 {checkout ? (
                     <div className={`${bgCard} rounded-xl p-10 text-center`}>
                         <p className="text-6xl mb-4">✅</p>
                         <h3 className="text-2xl font-bold mb-2">Pesanan Berhasil!</h3>
                         <p className={`${textMuted} mb-4`}>Terima kasih telah berbelanja di TechStore. Kami akan segera memproses pesanan kamu.</p>
 
-                        {/* Alamat tujuan pengiriman */}
                         {alamatTersimpan?.namaPenerima && (
                             <div className={`text-left rounded-xl p-4 mb-6 text-sm ${bgInfo}`}>
                                 <p className="font-bold mb-2">📍 Dikirim ke:</p>
@@ -89,7 +87,6 @@ function Keranjang() {
 
                 ) : keranjang.length === 0 ? (
 
-                    /* State: Keranjang Kosong */
                     <div className="text-center py-20">
                         <p className="text-6xl mb-4">🛒</p>
                         <h3 className="text-xl font-bold mb-2">Keranjang Kosong</h3>
@@ -101,10 +98,8 @@ function Keranjang() {
 
                 ) : (
 
-                    /* State: Ada Produk */
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
-                        {/* Daftar Produk */}
                         <div className="md:col-span-2 space-y-4">
                             {keranjang.map((produk) => (
                                 <div key={produk.id} className={`${bgCard} rounded-xl p-5 flex items-center gap-4`}>
@@ -114,23 +109,19 @@ function Keranjang() {
                                         <h3 className="font-bold mt-1">{produk.nama}</h3>
                                         <p className="text-blue-500 font-semibold">{formatRupiah(produk.harga)}</p>
                                     </div>
-                                    {/* Tombol kurang/tambah qty */}
                                     <div className="flex items-center gap-2">
                                         <button onClick={() => kurangQty(produk.id)} className={`${bgBtn} text-current w-8 h-8 rounded-full font-bold transition`}>-</button>
                                         <span className="w-6 text-center font-bold">{produk.qty}</span>
                                         <button onClick={() => tambahKeranjang(produk)} className={`${bgBtn} text-current w-8 h-8 rounded-full font-bold transition`}>+</button>
                                     </div>
-                                    {/* Tombol hapus produk */}
                                     <button onClick={() => hapusProduk(produk.id)} className="text-red-400 hover:text-red-300 text-xl transition ml-2">🗑️</button>
                                 </div>
                             ))}
                         </div>
 
-                        {/* Ringkasan Pesanan */}
                         <div className={`${bgCard} rounded-xl p-6 h-fit sticky top-24`}>
                             <h3 className="text-xl font-bold mb-4">Ringkasan Pesanan</h3>
 
-                            {/* Detail item */}
                             <div className="space-y-2 mb-4">
                                 {keranjang.map((p) => (
                                     <div key={p.id} className={`flex justify-between text-sm ${textMuted}`}>
@@ -140,7 +131,6 @@ function Keranjang() {
                                 ))}
                             </div>
 
-                            {/* Total harga */}
                             <div className={`border-t ${isDark ? "border-gray-700" : "border-gray-200"} pt-4 mb-4`}>
                                 <div className="flex justify-between font-bold text-lg">
                                     <span>Total</span>
@@ -148,7 +138,13 @@ function Keranjang() {
                                 </div>
                             </div>
 
-                            {/* Peringatan belum login */}
+                            {/* Error */}
+                            {error && (
+                                <div className="bg-red-900 border border-red-500 text-red-300 px-3 py-2 rounded-lg text-xs mb-3">
+                                    ⚠️ {error}
+                                </div>
+                            )}
+
                             {belumLogin && (
                                 <div className="bg-yellow-900 border border-yellow-600 text-yellow-300 text-xs px-3 py-2 rounded-lg mb-3">
                                     ⚠️ Kamu belum login.{" "}
@@ -158,7 +154,6 @@ function Keranjang() {
                                 </div>
                             )}
 
-                            {/* Peringatan belum isi alamat */}
                             {!belumLogin && belumAlamat && (
                                 <div className="bg-yellow-900 border border-yellow-600 text-yellow-300 text-xs px-3 py-2 rounded-lg mb-3">
                                     ⚠️ Belum ada alamat pengiriman.{" "}
@@ -168,7 +163,6 @@ function Keranjang() {
                                 </div>
                             )}
 
-                            {/* Info alamat kalau sudah diisi */}
                             {alamatTersimpan?.namaPenerima && (
                                 <div className={`text-xs rounded-lg p-3 mb-4 ${bgInfo}`}>
                                     <p className="font-bold mb-1">📍 Kirim ke:</p>
@@ -180,16 +174,11 @@ function Keranjang() {
                                 </div>
                             )}
 
-                            {/* Tombol checkout — disabled kalau belum login atau belum isi alamat */}
-                            <button
-                                onClick={handleCheckout}
-                                disabled={!bisaCheckout}
-                                className={`w-full py-3 rounded-full font-semibold transition text-white ${bisaCheckout ? "bg-blue-500 hover:bg-blue-600" : "bg-gray-600 cursor-not-allowed opacity-60"}`}
-                            >
-                                {belumLogin ? "🔒 Login untuk Checkout" : belumAlamat ? "📍 Isi Alamat untuk Checkout" : "Checkout Sekarang 🚀"}
+                            <button onClick={handleCheckout} disabled={!bisaCheckout || loading}
+                                className={`w-full py-3 rounded-full font-semibold transition text-white ${bisaCheckout && !loading ? "bg-blue-500 hover:bg-blue-600" : "bg-gray-600 cursor-not-allowed opacity-60"}`}>
+                                {loading ? "Memproses..." : belumLogin ? "🔒 Login untuk Checkout" : belumAlamat ? "📍 Isi Alamat untuk Checkout" : "Checkout Sekarang 🚀"}
                             </button>
 
-                            {/* Tombol tambah produk lagi */}
                             <button onClick={() => navigate("/produk")}
                                 className={`w-full mt-3 border ${isDark ? "border-gray-600 text-gray-400 hover:border-blue-500 hover:text-blue-400" : "border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-500"} py-3 rounded-full font-semibold transition`}>
                                 + Tambah Produk
